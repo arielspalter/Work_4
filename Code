@@ -1,0 +1,183 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scipy.stats as stats
+
+
+Carseats = pd.read_csv("C:\Users\Ariel\Documents\Carseats.csv")
+
+# Look at the data
+print Carseats.describe()
+print Carseats.info()
+print Carseats.shape
+
+# Subsetting US locations only
+Carseats_US = Carseats[Carseats["US"] == 'Yes']
+print Carseats_US.shape
+
+# Preparing the samples for the Shelf Location variable anova model.
+Good_Location = Carseats_US['Sales'][Carseats_US.ShelveLoc == 'Good']
+print Good_Location.shape
+Med_Location = Carseats_US.Sales[Carseats_US.ShelveLoc == 'Medium']
+print Med_Location.shape
+Bad_Location = Carseats_US.Sales[Carseats_US.ShelveLoc == 'Bad']
+print Bad_Location.shape
+
+Anova_ShelveLoc = stats.f_oneway(Good_Location,Med_Location,Bad_Location)
+print "The Model's p-value is: %0.3f" % Anova_ShelveLoc.pvalue
+
+# Preparing the samples for the Urban variable anova model.
+
+Urban = Carseats_US['Sales'][Carseats_US.Urban == 'Yes']
+print Urban.shape
+Not_Urban = Carseats_US['Sales'][Carseats_US.Urban == 'No']
+print Not_Urban.shape
+Anova_Urban = stats.f_oneway(Urban, Not_Urban)
+print  "The Model's p-value is %0.1f%%"  % (Anova_Urban.pvalue*100)
+
+# The shelf location in the store is much more significant than urban location
+# Another way of seeing this fact in numbers:
+print Carseats_US.pivot_table(index = 'ShelveLoc', values = 'Sales', aggfunc = np.mean)
+print Carseats_US.pivot_table(index = 'Urban', values = 'Sales', aggfunc = np.mean)
+
+# # And visualized, using boxplots:
+sns.boxplot(x='ShelveLoc', y='Sales', data=Carseats_US)
+plt.show()
+
+sns.boxplot(x='Urban', y='Sales', data=Carseats_US)
+plt.show()
+
+# Subsetting the numeric attributes
+Carseats_Num = Carseats_US.iloc[:,[2,3,4,5,6,8,9]]
+print Carseats_Num.info()
+print Carseats_Num.head()
+
+# Check Colrrelations
+Corr = Carseats_Num.corr()
+print Corr
+sns.heatmap(Corr, annot = True)
+plt.show()
+
+# Copying the columns to list for the next DataFrames creations
+Columns_Names = Carseats_Num.columns.tolist()
+print Columns_Names
+
+## Preprocessing the numeric attributes
+# MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler
+scaler_1 = MinMaxScaler(feature_range=(0,1))
+Carseats_MinMax = scaler_1.fit_transform(Carseats_Num)
+Carseats_MinMax = pd.DataFrame(Carseats_MinMax, columns = Columns_Names)
+
+# Normalized
+from sklearn.preprocessing import Normalizer
+scaler_2 = Normalizer().fit(Carseats_Num)
+Carseats_Normalized = scaler_2.transform(Carseats_Num)
+Carseats_Normalized = pd.DataFrame(Carseats_Normalized, columns = Columns_Names)
+
+# Standardized
+from sklearn.preprocessing import StandardScaler
+scaler_3 = StandardScaler().fit(Carseats_Num)
+Carseats_Stand = scaler_3.transform(Carseats_Num)
+Carseats_Stand = pd.DataFrame(Carseats_Stand, columns = Columns_Names)
+
+
+# Adding the non-preprocessed original 'Sales' to the numeric DataFrames
+df = Carseats_US['Sales'] # A list is created first, and than concated to the DataFrames
+Carseats_Num = pd.concat([Carseats_Num, df], axis=1, join_axes=[Carseats_Num.index])
+Carseats_MinMax = pd.concat([Carseats_MinMax, df], axis=1, join_axes=[Carseats_MinMax.index])
+Carseats_Normalized = pd.concat([Carseats_Normalized, df], axis=1, join_axes=[Carseats_Normalized.index])
+Carseats_Stand = pd.concat([Carseats_Stand, df], axis=1, join_axes=[Carseats_Stand.index])
+
+print " MinMax dimensions"
+print Carseats_MinMax.shape
+print " Normalized dimensions"
+print Carseats_Normalized.shape
+print " Standardized dimensions"
+print Carseats_Stand.shape
+
+## Fitting the regression models
+
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LinearRegression
+array = Carseats_Num.values
+X = array[:,0:6]
+Y = array[:,7]
+kfold = KFold(n_splits = 10, random_state = 34)
+scoring = 'r2'
+
+## LINEAR MODELS
+# Linear Regression
+LinearRegression_Model = LinearRegression()
+LinearRegression_Results = cross_val_score(LinearRegression_Model, X, Y, cv=kfold, scoring=scoring)
+
+
+# Ridge Regression
+from sklearn.linear_model import Ridge
+Ridge_Model = Ridge()
+Ridge_Model_Results = cross_val_score(Ridge_Model, X, Y, cv=kfold, scoring=scoring)
+
+
+# LASSO Regression
+from sklearn.linear_model import Lasso
+Lasso_Model = Lasso()
+Lasso_Model_Results = cross_val_score(Lasso_Model, X, Y, cv=kfold, scoring=scoring)
+
+
+# ElasticNet Regression
+from sklearn.linear_model import ElasticNet
+ElasticNet_Model = Lasso()
+ElasticNet_Model_Results = cross_val_score(Lasso_Model, X, Y, cv=kfold, scoring=scoring)
+
+
+## NON-LINEAR MODELS
+array_Norm = Carseats_Stand.values
+X_Norm = array_Norm[:,0:6]
+# Y Remain the same
+
+# Knn Regression
+from sklearn.neighbors import KNeighborsRegressor
+Knn_Model = KNeighborsRegressor()
+Knn_Model_Results = cross_val_score(Knn_Model, X_Norm, Y, cv=kfold, scoring=scoring)
+
+
+# Cart Regression
+from sklearn.tree import DecisionTreeRegressor
+Cart_Model = DecisionTreeRegressor()
+Cart_Model_Results = cross_val_score(Cart_Model, X, Y, cv=kfold, scoring=scoring)
+
+
+# SVM Regression
+from sklearn.svm import SVR
+SVR_Model = SVR()
+SVR_Model_Results = cross_val_score(SVR_Model, X, Y, cv=kfold, scoring=scoring)
+
+# Applying the models and reporting the results in one go
+All_Models = []
+All_Models.append(('Linear', LinearRegression() ))
+All_Models.append(('Ridge', Ridge() ))
+All_Models.append(('Lasso', Lasso() ))
+All_Models.append(('ElasticNet', ElasticNet() ))
+
+All_Results = []
+All_Names = []
+
+for name, model in All_Models:
+	cv_results = cross_val_score(model, X, Y, cv = kfold, scoring = scoring)
+	All_Results.append(cv_results)
+	All_Names.append(name)
+	msg = "%s: %f" % (name, cv_results.mean())
+	print (msg)
+
+# Plotting multiple boxplots with pyplot
+fig = plt.figure()
+fig.suptitle("Results")
+ax = fig.add_subplot(111)
+plt.boxplot(All_Results)
+ax.set_xticklabels(All_Names)
+
+# Plotting multiple boxplots with seaborn
+sns.boxplot(x=All_Names, y=All_Results)
+plt.show()
